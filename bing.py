@@ -8,8 +8,11 @@ import uuid
 import wave
 import io
 from monotonic import monotonic
-from urllib import urlencode
-from urllib2 import Request, urlopen, URLError, HTTPError
+from urllib.parse import urlencode
+from urllib.request import Request
+from urllib.error import URLError
+from urllib.error import HTTPError
+from urllib.request import urlopen
 
 # get a key from https://www.microsoft.com/cognitive-services/en-us/speech-api
 BING_KEY = 'ba2c2f0fbe4440ec9191ce0f5e24cc96'
@@ -67,24 +70,28 @@ class BingVoice():
     def auth(self):
         if self.expire_time is None or monotonic() > self.expire_time:  # first credential request, or the access token from the previous one expired
             # get an access token using OAuth
-            credential_url = "https://oxford-speech.cloudapp.net/token/issueToken"
+            #credential_url = "https://oxford-speech.cloudapp.net/token/issueToken"
+            credential_url = "https://api.cognitive.microsoft.com/sts/v1.0/issueToken"
             credential_request = Request(credential_url, data=urlencode({
                 "grant_type": "client_credentials",
                 "client_id": "python",
                 "client_secret": self.key,
                 "scope": "https://speech.platform.bing.com"
-            }).encode("utf-8"))
+            }).encode("utf-8"), headers= {'content-type' : 'application/x-www-form-urlencoded', 'content-legth':0, 'Ocp-Apim-Subscription-Key' : self.key})
             start_time = monotonic()
             try:
                 credential_response = urlopen(credential_request)
             except HTTPError as e:
+                print("fail token", e)
                 raise RequestError("recognition request failed: {0}".format(
                     getattr(e, "reason", "status {0}".format(e.code))))  # use getattr to be compatible with Python 2.6
             except URLError as e:
+                print("fail token")
                 raise RequestError("recognition connection failed: {0}".format(e.reason))
             credential_text = credential_response.read().decode("utf-8")
-            credentials = json.loads(credential_text)
-            self.access_token, expiry_seconds = credentials["access_token"], float(credentials["expires_in"])
+            print("got token",credential_text)
+            #credentials = json.loads(credential_text)
+            self.access_token, expiry_seconds = credential_text, 1000000000
 
             self.expire_time = start_time + expiry_seconds
 
@@ -202,7 +209,7 @@ if __name__ == '__main__':
     # recognize speech using Microsoft Bing Voice Recognition
     try:
         text = bing.recognize(frames, language='en-US')
-        print('Bing:' + text.encode('utf-8'))
+        print('Bing:', text.encode('utf-8'))
     except UnknownValueError:
         print("Microsoft Bing Voice Recognition could not understand audio")
     except RequestError as e:

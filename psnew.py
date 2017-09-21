@@ -45,8 +45,8 @@ try:
     if args.samplerate is None:
         device_info = sd.query_devices(args.device, 'input')
         # soundfile expects an int, sounddevice provides a float:
-        #args.samplerate = int(device_info['default_samplerate'])
-        args.samplerate = 16000 #int(device_info['default_samplerate'])
+        # args.samplerate = int(device_info['default_samplerate'])
+        arg.samplerate = 16000 
     if args.filename is None:
         args.filename = tempfile.mktemp(prefix='rec_unlimited_',
                                         suffix='.wav', dir='')
