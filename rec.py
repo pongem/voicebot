@@ -9,6 +9,7 @@ import time
 import json
 import uuid
 import sys
+import numpy as np
 from monotonic import monotonic
 from urllib.parse import urlencode
 from urllib.request import Request
@@ -20,7 +21,9 @@ from urllib.request import urlopen
 FINAME = 'voice.wav'
 BING_KEY = 'ba2c2f0fbe4440ec9191ce0f5e24cc96'
 DEBUG_MODE = False
-INTERVAL = 1 #seconds
+INTERVAL = 2 #seconds
+ACCEPTABLE_AMP = 50
+ACCEPTABLE_NO_FRAME = 5000
     
 def int_or_str(text):
     """Helper function for argument parsing."""
@@ -234,6 +237,15 @@ try:
         if status:
             print(status, file=sys.stderr)
         q.put(indata.copy())
+        
+    def extractQ(q, total, no_frames, file):
+        while (not q.empty()) or (total/no_frames<(1/ACCEPTABLE_AMP)):
+            temp = q.get()
+            #print("sum q", abs(sum(temp)))
+            total += np.linalg.norm(temp)
+            no_frames += 1
+            file.write(temp)
+        return total, no_frames
             
     # Make sure the file is opened before recording anything:
     with sd.InputStream(samplerate=args.samplerate, device=args.device,
@@ -242,23 +254,30 @@ try:
         print('press Ctrl+C to stop the recording')
         print('#' * 20)
         while True:
+            total = 0.0
+            no_frames = 0
             if DEBUG_MODE: print('processing')         
             if DEBUG_MODE: print('create bing')    
-            print("+")  
             bing = BingVoice(BING_KEY)
             with io.BytesIO() as wav_file:
                 with sf.SoundFile(wav_file, mode='x', samplerate=args.samplerate,
                                   channels=args.channels, subtype=args.subtype, format='wav') as file:
-                    while not q.empty():
-                        temp = q.get()
-                        file.write(temp)
+                    total, no_frames = extractQ(q, total, no_frames, file)
+                    if DEBUG_MODE: print("len",q.qsize())
+                    if DEBUG_MODE: print("total",total)
+                    if DEBUG_MODE: print("no_frames",no_frames)
                     # recognize speech using Microsoft Bing Voice Recognition
                     try:
-                        if DEBUG_MODE: print('calling bing')   
-                        text = bing.recognize(bytes(wav_file.getbuffer()), language='en-US')
-                        print('Bing:', text.encode('utf-8'))
+                        if DEBUG_MODE: print('calling bing')  
+                        if DEBUG_MODE: print("total", total) 
+                        text = "*"
+                        if DEBUG_MODE: print("no_frames",no_frames)
+                        if no_frames < ACCEPTABLE_NO_FRAME : 
+                            text = bing.recognize(bytes(wav_file.getbuffer()), language='en-US')
+                        if text != "*":
+                            print('Bing:', text.encode('utf-8'))
                     except UnknownValueError:
-                        print("Microsoft Bing Voice Recognition could not understand audio")
+                        print("I am not sure what you said.")
                     except RequestError as e:
                         print("Could not request results from Microsoft Bing Voice Recognition service; {0}".format(e))
                     #raise KeyboardInterrupt("test")
